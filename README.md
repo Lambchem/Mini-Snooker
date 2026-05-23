@@ -635,13 +635,7 @@ It is inspired by snooker rules and table layout, but it does not attempt to ful
 
 ## Author
 
-Created by Your Name.
-
-GitHub:
-
-```text
-https://github.com/your-username
-```
+Created by Joeyfully.
 
 ---
 
