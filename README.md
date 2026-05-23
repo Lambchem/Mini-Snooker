@@ -1,5 +1,7 @@
 # Mini Snooker
 
+![Mini Snooker Gameplay](screenshots.jpg)
+
 A lightweight browser-based snooker game built with **HTML5 Canvas**, **CSS**, and **vanilla JavaScript**. The game is in Chinese, but I'm glad someone could translate it into English.
 
 Mini Snooker is an arcade-style snooker mini game that runs directly in the browser. It includes a playable snooker table, cue aiming, power control, ball collision physics, scoring, fouls, multiple game modes, visual aiming assistance, and a polished in-game HUD.
