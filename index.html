@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Snooker</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#0f0f1a;
+  display:flex; justify-content:center; align-items:center;
+  min-height:100vh; font-family:'Segoe UI',system-ui,sans-serif;
+  overflow:hidden; user-select:none;
+}
+.game-wrap {
+  position:relative;
+  background:linear-gradient(145deg,#1a1a2e,#16213e);
+  border-radius:20px;
+  padding:18px;
+  box-shadow:0 20px 80px rgba(0,0,0,0.9),0 0 40px rgba(0,80,0,0.08);
+  max-height:98vh;
+  max-width:98vw;
+}
+canvas {
+  display:block; border-radius:12px; cursor:crosshair; touch-action:none;
+  max-height:calc(98vh - 36px);
+  max-width:calc(98vw - 36px);
+}
+/* HUD */
+.hud {
+  position:absolute; top:20px; left:20px;
+  display:flex; gap:8px; align-items:center;
+  background:rgba(0,0,0,0.65); backdrop-filter:blur(12px);
+  padding:6px 20px 6px 24px; border-radius:30px;
+  border:1px solid rgba(255,255,255,0.06);
+  pointer-events:none; z-index:10;
+}
+.hud-player {
+  display:flex; align-items:center; gap:8px; padding:4px 12px;
+  border-radius:20px; transition:all 0.3s;
+}
+.hud-player.active {
+  background:rgba(255,255,255,0.08);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,0.1);
+}
+.hud-dot { width:8px; height:8px; border-radius:50%; }
+.hud-dot.p1 { background:#4dabf7; }
+.hud-dot.p2 { background:#ff6b9d; }
+.hud-name { color:#999; font-size:11px; font-weight:500; letter-spacing:0.5px; }
+.hud-score { color:#fff; font-size:18px; font-weight:700; min-width:30px; text-align:center; }
+.hud-sep { color:rgba(255,255,255,0.15); font-size:16px; }
+.hud-turn { color:rgba(255,255,255,0.3); font-size:10px; letter-spacing:1px; margin-left:4px; }
+/* Power bar */
+.power-wrap {
+  position:absolute; bottom:50px; left:50%; transform:translateX(-50%);
+  z-index:10; pointer-events:none; opacity:0; transition:opacity 0.2s;
+}
+.power-wrap.show { opacity:1; }
+.power-track {
+  width:280px; height:12px;
+  background:rgba(0,0,0,0.5); backdrop-filter:blur(4px);
+  border-radius:10px; border:1px solid rgba(255,255,255,0.06);
+  overflow:hidden; position:relative;
+}
+.power-fill {
+  height:100%; width:0%; border-radius:10px;
+  background:linear-gradient(90deg,#2ed573,#ffd93d 40%,#ff9f43 65%,#ff4757);
+  transition:width 0.04s linear;
+}
+.power-label {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  color:rgba(255,255,255,0.2); font-size:8px; font-weight:600;
+  letter-spacing:2px; text-transform:uppercase; white-space:nowrap;
+  transition:opacity 0.3s;
+}
+.power-value {
+  position:absolute; top:50%; right:-44px; transform:translateY(-50%);
+  color:rgba(255,255,255,0.4); font-size:11px; font-weight:700;
+  font-variant-numeric:tabular-nums; min-width:36px; text-align:right;
+}
+/* Messages */
+.msg-overlay {
+  position:absolute; inset:0; z-index:20;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.msg-box {
+  background:rgba(0,0,0,0.6); backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:20px; padding:24px 48px;
+  text-align:center; transform:scale(0.9); opacity:0;
+  transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.msg-box.show { transform:scale(1); opacity:1; }
+.msg-title { color:#fff; font-size:28px; font-weight:700; }
+.msg-sub { color:#aaa; font-size:14px; margin-top:6px; }
+.msg-sub em { color:#ffd93d; font-style:normal; }
+
+/* Foul toast */
+.foul-toast {
+  position:absolute; top:80px; left:50%; transform:translateX(-50%);
+  z-index:15; pointer-events:none;
+  background:rgba(255,50,50,0.15); backdrop-filter:blur(8px);
+  border:1px solid rgba(255,50,50,0.2);
+  padding:6px 20px; border-radius:14px;
+  color:#ff6b6b; font-size:13px; font-weight:500;
+  opacity:0; transition:all 0.3s;
+}
+.foul-toast.show { opacity:1; }
+
+/* Ball count */
+.ball-count {
+  position:absolute; top:30px; right:30px; z-index:10;
+  display:flex; flex-direction:column; align-items:flex-end; gap:2px;
+  pointer-events:none;
+}
+.ball-count-group {
+  display:flex; align-items:center; gap:6px;
+  background:rgba(0,0,0,0.3); backdrop-filter:blur(4px);
+  padding:3px 10px; border-radius:12px;
+  border:1px solid rgba(255,255,255,0.04);
+}
+.ball-count-label { color:rgba(255,255,255,0.25); font-size:9px; letter-spacing:0.5px; }
+.ball-count-item { display:flex; align-items:center; gap:4px; }
+.ball-count-dot {
+  width:7px; height:7px; border-radius:50%; display:inline-block;
+  box-shadow:inset 0 0 2px rgba(0,0,0,0.3);
+}
+.ball-count-num { color:rgba(255,255,255,0.5); font-size:11px; font-weight:600; }
+.ball-count-sep { color:rgba(255,255,255,0.1); font-size:8px; }
+
+/* Restart */
+.restart-btn {
+  position:absolute; bottom:30px; right:30px; z-index:10;
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.08);
+  color:rgba(255,255,255,0.5); padding:6px 16px; border-radius:20px;
+  font-size:11px; cursor:pointer; transition:all 0.2s;
+  pointer-events:auto;
+}
+.restart-btn:hover { background:rgba(255,255,255,0.12); color:#fff; }
+
+/* Mode select — inline in HUD */
+.mode-select {
+  background:transparent;
+  border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.4); padding:3px 22px 3px 8px;
+  border-radius:14px; font-size:10px; cursor:pointer;
+  transition:all 0.2s; outline:none;
+  appearance:none; -webkit-appearance:none;
+  font-family:inherit; letter-spacing:0.3px;
+  pointer-events:auto;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='rgba(255,255,255,0.25)'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 6px center;
+}
+.mode-select:hover { color:#fff; border-color:rgba(255,255,255,0.25); background:rgba(255,255,255,0.06); }
+.mode-select option {
+  background:#1a1a2e; color:#bbb; padding:8px 12px;
+  font-size:11px;
+}
+</style>
+</head>
+<body>
+
+<div class="game-wrap">
+  <canvas id="gc"></canvas>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud-player" id="p1Box">
+      <span class="hud-dot p1"></span>
+      <span class="hud-name">选手 1</span>
+      <span class="hud-score" id="p1Score">0</span>
+    </div>
+    <span class="hud-sep">|</span>
+    <div class="hud-player" id="p2Box">
+      <span class="hud-dot p2"></span>
+      <span class="hud-name">选手 2</span>
+      <span class="hud-score" id="p2Score">0</span>
+    </div>
+    <span class="hud-turn" id="turnLabel">● 回合</span>
+    <select class="mode-select" id="modeSelect">
+      <option value="restart">🔄 重新开局</option>
+      <option value="classic" selected>经典模式</option>
+      <option value="clearance">清彩模式</option>
+      <option value="respottedBlack">抢黑模式</option>
+    </select>
+  </div>
+
+  <!-- Ball count -->
+  <div class="ball-count" id="ballCount"></div>
+
+  <!-- Power -->
+  <div class="power-wrap" id="powerWrap">
+    <div class="power-track">
+      <div class="power-fill" id="powerFill"></div>
+      <div class="power-label" id="powerLabel">← → 力度</div>
+    </div>
+    <div class="power-value" id="powerValue">0%</div>
+  </div>
+
+  <!-- Messages -->
+  <div class="msg-overlay">
+    <div class="msg-box" id="msgBox">
+      <div class="msg-title" id="msgTitle"></div>
+      <div class="msg-sub" id="msgSub"></div>
+    </div>
+  </div>
+
+  <!-- Foul -->
+  <div class="foul-toast" id="foulToast"></div>
+</div>
+
+<script>
+// ================================================================
+//  CONSTANTS
+// ================================================================
+// 正式斯诺克台：可打区域 3569×1778 mm，球直径 52.5 mm
+// 横向布局：开球区在左，黑球端在右
+const BALL_R = 10;
+const BALL_D = BALL_R * 2;
+const CUSHION = 28;
+const TABLE_W = 68 * BALL_D;   // 长边横向 1360
+const TABLE_H = 34 * BALL_D;   // 短边纵向 680
+const POCKET_R = 22;
+
+const W = TABLE_W + CUSHION * 2;  // 1416
+const H = TABLE_H + CUSHION * 2;  // 736
+
+const L = CUSHION, R = CUSHION + TABLE_W;
+const T = CUSHION, B = CUSHION + TABLE_H;
+
+const FRICTION = 0.986;
+const BOUNCE = 0.78;
+const MIN_SPEED = 0.06;
+const MAX_POWER = 24;
+const SPACING = BALL_D + 0.5;
+
+const canvas = document.getElementById('gc');
+const ctx = canvas.getContext('2d');
+canvas.width = W;
+canvas.height = H;
+
+// 请求高性能GPU —— 多种方式强制切换到NVIDIA独显
+(function forceDedicatedGPU() {
+  // 方式1: WebGPU —— 现代浏览器最有效的GPU切换方式
+  if (navigator.gpu) {
+    navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }).then(adapter => {
+      if (adapter) console.log('WebGPU 已激活高性能适配器');
+    }).catch(() => {});
+  }
+
+  // 方式2: WebGL2 + 实际渲染 —— 比空上下文更可靠
+  const glCanvas = document.createElement('canvas');
+  glCanvas.width = glCanvas.height = 64;  // 不能太小，有些驱动会忽略
+  const gl = glCanvas.getContext('webgl2', {
+    powerPreference: 'high-performance',
+    antialias: true,
+    preserveDrawingBuffer: false
+  }) || glCanvas.getContext('webgl', {
+    powerPreference: 'high-performance',
+    antialias: true,
+    preserveDrawingBuffer: false
+  });
+
+  if (gl) {
+    // 做一个实际渲染来激活GPU
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.finish();  // 强制刷新，确保驱动识别
+
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbg) console.log('GPU:', gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL));
+
+    // 保持上下文活跃 —— 每30秒刷新一次防止被回收
+    setInterval(() => {
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.finish();
+    }, 30000);
+  }
+})();
+
+// ================================================================
+//  DOM refs
+// ================================================================
+const p1ScoreEl = document.getElementById('p1Score');
+const p2ScoreEl = document.getElementById('p2Score');
+const p1Box = document.getElementById('p1Box');
+const p2Box = document.getElementById('p2Box');
+const turnLabel = document.getElementById('turnLabel');
+const powerWrap = document.getElementById('powerWrap');
+const powerFill = document.getElementById('powerFill');
+const powerLabel = document.getElementById('powerLabel');
+const powerValue = document.getElementById('powerValue');
+const msgBox = document.getElementById('msgBox');
+const msgTitle = document.getElementById('msgTitle');
+const msgSub = document.getElementById('msgSub');
+const foulToast = document.getElementById('foulToast');
+const ballCountEl = document.getElementById('ballCount');
+const modeSelect = document.getElementById('modeSelect');
+
+// ================================================================
+//  POCKETS（横向：长边在上下两侧）
+// ================================================================
+const CX_TABLE = L + TABLE_W / 2;
+const pockets = [
+  { x: L - 2,   y: T - 2 },         // 左上角袋
+  { x: L - 2,   y: B + 2 },         // 左下角袋
+  { x: CX_TABLE, y: T - 6 },        // 上侧中袋
+  { x: CX_TABLE, y: B + 6 },        // 下侧中袋
+  { x: R + 2,   y: T - 2 },         // 右上角袋
+  { x: R + 2,   y: B + 2 },         // 右下角袋
+];
+
+// ================================================================
+//  COLOR MAP
+// ================================================================
+const COL = {
+  red:    '#ff4757',
+  yellow: '#ffd93d',
+  green:  '#2ed573',
+  brown:  '#c0854a',
+  blue:   '#4dabf7',
+  pink:   '#ff6b9d',
+  black:  '#222',
+  white:  '#f5f5f5',
+};
+const COL_VAL = { red:1, yellow:2, green:3, brown:4, blue:5, pink:6, black:7 };
+const COL_ORDER = ['yellow','green','brown','blue','pink','black'];
+
+// ================================================================
+//  BALL CLASS
+// ================================================================
+class Ball {
+  constructor(x, y, label) {
+    this.x = x; this.y = y;
+    this.r = BALL_R;
+    this.label = label;
+    this.color = COL[label];
+    this.vx = 0; this.vy = 0;
+    this.active = true;
+    this.potted = false;
+  }
+  get speed() { return Math.hypot(this.vx, this.vy); }
+  get value() { return COL_VAL[this.label] || 0; }
+  get isColor() { return this.label !== 'red' && this.label !== 'white'; }
+  
+  update() {
+    if (!this.active || this.potted) return;
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vx *= FRICTION;
+    this.vy *= FRICTION;
+    if (this.speed < MIN_SPEED) { this.vx = 0; this.vy = 0; }
+    // Cushions
+    if (this.x - this.r < L) { this.x = L + this.r; this.vx = -this.vx * BOUNCE; }
+    if (this.x + this.r > R) { this.x = R - this.r; this.vx = -this.vx * BOUNCE; }
+    if (this.y - this.r < T) { this.y = T + this.r; this.vy = -this.vy * BOUNCE; }
+    if (this.y + this.r > B) { this.y = B - this.r; this.vy = -this.vy * BOUNCE; }
+  }
+
+  isOnTable() { return this.active && !this.potted; }
+}
+
+// ================================================================
+//  STATE
+// ================================================================
+let balls = [], cueBall = null;
+let scores = [0, 0];
+let currentPlayer = 0;
+let state = 'aim';
+let aimAngle = 0, power = 0;
+let foul = false, foulText = '';
+let needRed = true;
+let pottedRedThisTurn = false;
+let firstContact = null;
+let msgTimer = null;
+let draggingCueBall = false;  // 手动放置白球标志
+let keysPressed = {};  // 按键状态字典，用于持续加力
+let pottedThisShot = [];  // 本轮进球记录
+let dragStartX = 0, dragStartY = 0;  // 拖拽起点
+let isRespottedBlack = false;  // 抢黑模式（比赛中平局触发）
+let gameMode = 'classic';  // 菜单选择的模式: classic | clearance | respottedBlack
+
+// ================================================================
+//  HELPERS
+// ================================================================
+function countActive(label) {
+  return balls.filter(b => b.label === label && b.isOnTable()).length;
+}
+function countRed() { return countActive('red'); }
+function countColors() {
+  return balls.filter(b => b.isColor && b.isOnTable()).length;
+}
+function getColors() { return balls.filter(b => b.isColor && b.isOnTable()); }
+function getNextColorInOrder() {
+  for (const label of COL_ORDER) {
+    const b = balls.find(bb => bb.label === label && bb.isOnTable());
+    if (b) return b;
+  }
+  return null;
+}
+
+function ballOverlaps(x, y, exclude) {
+  for (const b of balls) {
+    if (b === exclude || !b.isOnTable()) continue;
+    if (Math.hypot(x - b.x, y - b.y) < BALL_R * 2 + 1.5) return true;
+  }
+  return false;
+}
+
+// ================================================================
+//  POSITIONS — 横向球台，开球区在左，黑球端在右
+// ================================================================
+const CX2 = L + TABLE_W / 2;   // 横向中心 708
+const CY2 = T + TABLE_H / 2;   // 纵向中心（蓝球）368
+
+// 缩放：1360px / 3569mm = 0.381 px/mm
+const SCALE = TABLE_W / 3569;
+
+// 开球线：距左库（底库）737mm
+const BAULK_X = L + Math.round(737 * SCALE);
+// D区半径：292mm
+const DR = Math.round(292 * SCALE);
+// 黑球点：距右库（顶库）324mm
+const BLACK_X = R - Math.round(324 * SCALE);
+// 粉球点：标准坐标 2676.75mm（从左库0计），占75%的台面宽度
+const PINK_X = L + Math.round(2676.75 * SCALE);
+
+function getColorPos(label) {
+  const map = {
+    // 黄球在D区下方（顺时针第一个），绿球在D区上方（逆时针第一个）
+    yellow: { x: BAULK_X, y: CY2 + DR },
+    green:  { x: BAULK_X, y: CY2 - DR },
+    brown:  { x: BAULK_X, y: CY2 },
+    blue:   { x: CX2,     y: CY2 },
+    pink:   { x: PINK_X,  y: CY2 },
+    black:  { x: BLACK_X, y: CY2 },
+  };
+  return map[label] || null;
+}
+
+function tryPlace(ball, tx, ty) {
+  const offsets = [[0,0],[4,0],[-4,0],[0,4],[0,-4],[8,0],[-8,0],[0,8],[0,-8],[12,0],[-12,0],[0,12],[0,-12]];
+  for (const [dx, dy] of offsets) {
+    const nx = tx + dx, ny = ty + dy;
+    if (!ballOverlaps(nx, ny, ball)) {
+      ball.x = nx; ball.y = ny;
+      ball.active = true; ball.potted = false;
+      ball.vx = 0; ball.vy = 0;
+      return true;
+    }
+  }
+  return false;
+}
+
+// ================================================================
+//  INIT
+// ================================================================
+function initBalls() {
+  balls = [];
+
+  if (gameMode === 'clearance') {
+    initClearanceBalls();
+    return;
+  }
+  if (gameMode === 'respottedBlack') {
+    initRespottedBlackBalls();
+    return;
+  }
+
+  // 经典模式：15红 + 6彩 + 白球
+  // 白球：D区内左侧中点
+  cueBall = new Ball(BAULK_X - DR / 2, CY2, 'white');
+  balls.push(cueBall);
+
+  // 红球三角
+  const apexX = PINK_X + BALL_D + 1;
+  const rowStep = Math.round(Math.sqrt(3) / 2 * BALL_D * 100) / 100;
+  for (let row = 0; row < 5; row++) {
+    const rx = apexX + row * rowStep;
+    const count = row + 1;
+    for (let col = 0; col < count; col++) {
+      const py = CY2 + (col - row / 2) * BALL_D;
+      balls.push(new Ball(rx, py, 'red'));
+    }
+  }
+
+  // 彩球按固定点位
+  for (const label of ['yellow','green','brown','blue','pink','black']) {
+    const pos = getColorPos(label);
+    if (pos) balls.push(new Ball(pos.x, pos.y, label));
+  }
+}
+
+function initClearanceBalls() {
+  // 清彩模式：白球在D区 + 6个彩球在原点位
+  cueBall = new Ball(BAULK_X - DR / 2, CY2, 'white');
+  balls.push(cueBall);
+  for (const label of ['yellow','green','brown','blue','pink','black']) {
+    const pos = getColorPos(label);
+    if (pos) balls.push(new Ball(pos.x, pos.y, label));
+  }
+}
+
+function initRespottedBlackBalls() {
+  // 抢黑模式（菜单）：白球在D区 + 黑球在原点位
+  cueBall = new Ball(BAULK_X - DR / 2, CY2, 'white');
+  balls.push(cueBall);
+  balls.push(new Ball(BLACK_X, CY2, 'black'));
+}
+
+function separateBalls() {
+  for (let iter = 0; iter < 80; iter++) {
+    for (let i = 0; i < balls.length; i++) {
+      for (let j = i + 1; j < balls.length; j++) {
+        const a = balls[i], b = balls[j];
+        if (!a.isOnTable() || !b.isOnTable()) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < a.r + b.r && dist > 0.01) {
+          const overlap = (a.r + b.r - dist) / 2;
+          const nx = dx / dist, ny = dy / dist;
+          a.x -= nx * overlap; a.y -= ny * overlap;
+          b.x += nx * overlap; b.y += ny * overlap;
+        }
+      }
+    }
+  }
+}
+
+// ================================================================
+//  PHYSICS
+// ================================================================
+function resolveCollision(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > a.r + b.r || dist < 0.001) return false;
+  
+  const nx = dx / dist, ny = dy / dist;
+  const overlap = (a.r + b.r - dist) / 2;
+  a.x -= nx * overlap; a.y -= ny * overlap;
+  b.x += nx * overlap; b.y += ny * overlap;
+  
+  const dvx = a.vx - b.vx, dvy = a.vy - b.vy;
+  const relVn = dvx * nx + dvy * ny;
+  if (relVn <= 0) return true;
+  
+  const impulse = relVn * 0.82;
+  a.vx -= impulse * nx; a.vy -= impulse * ny;
+  b.vx += impulse * nx; b.vy += impulse * ny;
+  return true;
+}
+
+function checkPocket(ball) {
+  if (ball.potted) return false;
+  for (const p of pockets) {
+    if (Math.hypot(ball.x - p.x, ball.y - p.y) < POCKET_R + ball.r * 0.25) return true;
+  }
+  return false;
+}
+
+function placeCueBallInDZ() {
+  cueBall.active = true; cueBall.potted = false;
+  cueBall.vx = 0; cueBall.vy = 0;
+  // D区是以(BAULK_X, CY2)为圆心、DR为半径的左半圆（x ≤ BAULK_X）
+  cueBall.x = BAULK_X - DR / 2;
+  cueBall.y = CY2;
+  let tries = 0;
+  while (ballOverlaps(cueBall.x, cueBall.y, cueBall) && tries < 200) {
+    // 在D区内螺旋寻找空位
+    const step = tries * 5;
+    const angle = tries * 1.2;
+    cueBall.x = BAULK_X - Math.abs(Math.cos(angle)) * Math.min(DR - BALL_R * 2, step);
+    cueBall.y = CY2 + Math.sin(angle) * Math.min(DR - BALL_R * 2, step);
+    // 确保x在D区范围内（开球线左侧）
+    if (cueBall.x > BAULK_X - BALL_R) cueBall.x = BAULK_X - BALL_R;
+    tries++;
+  }
+}
+
+// ================================================================
+//  GAME RULES
+// ================================================================
+function getFoulPenalty() {
+  let base = 4;
+  if (firstContact && firstContact.value > base) base = firstContact.value;
+  return base;
+}
+
+function showMsg(title, sub, duration) {
+  msgTitle.textContent = title;
+  msgSub.innerHTML = sub || '';
+  msgBox.classList.add('show');
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => msgBox.classList.remove('show'), duration || 2000);
+}
+
+function showFoul(text) {
+  foul = true;
+  foulText = text;
+  foulToast.textContent = '⚠ 犯规！' + text;
+  foulToast.classList.add('show');
+  setTimeout(() => foulToast.classList.remove('show'), 3000);
+  const pen = getFoulPenalty();
+  // 犯规分加给对手
+  scores[1 - currentPlayer] += pen;
+  updateHUD();
+}
+
+function switchPlayer() {
+  currentPlayer = currentPlayer === 0 ? 1 : 0;
+  needRed = countRed() > 0;
+  pottedRedThisTurn = false;
+  pottedThisShot = [];
+  firstContact = null;
+  foul = false;
+  state = 'aim';
+  resetAimToDefault();
+  updateHUD();
+}
+
+function nextTurn() {
+  switchPlayer();
+}
+
+// ================================================================
+//  RESPOTTED BLACK（抢黑）
+// ================================================================
+function startRespottedBlack() {
+  isRespottedBlack = true;
+  needRed = false;
+  pottedRedThisTurn = false;
+  pottedThisShot = [];
+  firstContact = null;
+  foul = false;
+
+  // 清空所有球，只留黑球和白球
+  balls = [];
+
+  // 白球在D区
+  cueBall = new Ball(BAULK_X - DR / 2, CY2, 'white');
+  balls.push(cueBall);
+
+  // 黑球复位到点位
+  const blackBall = new Ball(BLACK_X, CY2, 'black');
+  balls.push(blackBall);
+
+  state = 'aim';
+  resetAimToDefault();
+  updateHUD();
+  
+  showMsg('⚫ 抢黑！', `同分 ${scores[0]} : ${scores[1]}<br>黑球复位，谁先打进即获胜`, 4000);
+}
+
+function endRespottedBlack(winner) {
+  isRespottedBlack = false;
+  state = 'over';
+  const name = `选手 ${winner + 1}`;
+  showMsg('🏆 比赛结束！', `<em>${name}</em> 获胜！<br>比分 ${scores[0]} : ${scores[1]}`, 8000);
+}
+
+function updateHUD() {
+  p1ScoreEl.textContent = scores[0];
+  p2ScoreEl.textContent = scores[1];
+  p1Box.classList.toggle('active', currentPlayer === 0);
+  p2Box.classList.toggle('active', currentPlayer === 1);
+  if (isRespottedBlack) {
+    turnLabel.textContent = `⚫ 抢黑 · 选手 ${currentPlayer + 1}`;
+  } else if (gameMode === 'clearance') {
+    turnLabel.textContent = `🎯 清彩 · 选手 ${currentPlayer + 1}`;
+  } else {
+    turnLabel.textContent = `● 选手 ${currentPlayer + 1} 回合`;
+  }
+  updateBallCount();
+}
+
+function updateBallCount() {
+  if (isRespottedBlack) {
+    ballCountEl.innerHTML = '<div class="ball-count-group">'
+      + '<span class="ball-count-label" style="color:#ffd93d;">⚫</span>'
+      + '<span class="ball-count-num" style="color:#ffd93d;">抢黑</span>'
+      + '</div>'
+      + '<div style="margin-top:4px;text-align:right;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:0.5px;">→ 击打黑球</div>';
+    return;
+  }
+  // 清彩模式特殊显示
+  if (gameMode === 'clearance') {
+    const colors = getColors();
+    let html = '<div class="ball-count-group">'
+      + '<span class="ball-count-label" style="color:#2ed573;">🎯</span>'
+      + '<span class="ball-count-num" style="color:#2ed573;">清彩</span>';
+    const colorLabels = ['yellow','green','brown','blue','pink','black'];
+    for (const label of colorLabels) {
+      const n = balls.filter(b => b.label === label && b.isOnTable()).length;
+      if (n > 0) {
+        html += '<span class="ball-count-sep">|</span>';
+        html += `<div class="ball-count-item"><span class="ball-count-dot" style="background:${COL[label]}"></span><span class="ball-count-num">${n}</span></div>`;
+      }
+    }
+    html += '</div>';
+    const next = getNextColorInOrder();
+    if (next) {
+      html += `<div style="margin-top:4px;text-align:right;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:0.5px;">→ 击打 ${next.label}</div>`;
+    }
+    ballCountEl.innerHTML = html;
+    return;
+  }
+  const reds = countRed();
+  const colors = getColors();
+  // Reds group
+  let html = '<div class="ball-count-group">';
+  html += '<span class="ball-count-label">红</span>';
+  html += `<div class="ball-count-item"><span class="ball-count-dot" style="background:${COL.red}"></span><span class="ball-count-num">${reds}</span></div>`;
+  // Colors
+  const colorLabels = ['yellow','green','brown','blue','pink','black'];
+  const showColors = colors.length > 0;
+  if (showColors) {
+    html += '<span class="ball-count-sep">|</span>';
+    for (const label of colorLabels) {
+      const n = balls.filter(b => b.label === label && b.isOnTable()).length;
+      if (n > 0) {
+        html += `<div class="ball-count-item"><span class="ball-count-dot" style="background:${COL[label]}"></span><span class="ball-count-num">${n}</span></div>`;
+      }
+    }
+  }
+  html += '</div>';
+  // Target indicator
+  const targetLabel = needRed ? '红球' : '彩球';
+  html += `<div style="margin-top:4px;text-align:right;font-size:10px;color:rgba(255,255,255,0.2);letter-spacing:0.5px;">→ 击打 ${targetLabel}</div>`;
+  ballCountEl.innerHTML = html;
+}
+
+// ================================================================
+//  SHOOT
+// ================================================================
+function shoot() {
+  if (state !== 'powering') return;
+  if (power < 0.5) { state = 'aim'; powerWrap.classList.remove('show'); return; }
+  const angle = aimAngle;
+  const pwr = power;
+  cueBall.vx = Math.cos(angle) * pwr;
+  cueBall.vy = Math.sin(angle) * pwr;
+  state = 'moving';
+  firstContact = null;
+  pottedThisShot = [];  // 清空本轮进球记录
+  foul = false;
+  powerWrap.classList.remove('show');
+  powerLabel.style.opacity = '1';
+}
+
+// ================================================================
+//  PHYSICS LOOP
+// ================================================================
+function tickPhysics() {
+  if (state !== 'moving') return;
+
+  // Move balls
+  for (const b of balls) {
+    if (!b.isOnTable()) continue;
+    b.update();
+  }
+
+  // Ball-ball collisions
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+      const a = balls[i], b = balls[j];
+      if (!a.isOnTable() || !b.isOnTable()) continue;
+      if (resolveCollision(a, b)) {
+        // Track first contact with cue ball
+        if (a === cueBall && !firstContact && b.isOnTable()) firstContact = b;
+        if (b === cueBall && !firstContact && a.isOnTable()) firstContact = a;
+      }
+    }
+  }
+
+  // Pockets
+  for (const b of balls) {
+    if (!b.isOnTable()) continue;
+    if (checkPocket(b)) {
+      b.potted = true;
+      b.active = false;
+      b.vx = 0; b.vy = 0;
+      onPocket(b);
+    }
+  }
+
+  // Check if all stopped
+  const anyMoving = balls.some(b => b.isOnTable() && b.speed > MIN_SPEED);
+  if (!anyMoving) {
+    for (const b of balls) { if (b.isOnTable()) { b.vx = 0; b.vy = 0; } }
+    onStop();
+  }
+}
+
+// ================================================================
+//  POCKET / STOP HANDLERS
+// ================================================================
+function onPocket(ball) {
+  // 比赛已结束则跳过（防止同帧多次落袋时重复处理）
+  if (state === 'over') return;
+
+  // 抢黑模式特殊规则
+  if (isRespottedBlack) {
+    if (ball.label === 'white') {
+      // 白球落袋 → 对手获胜
+      scores[1 - currentPlayer] += 7;
+      endRespottedBlack(1 - currentPlayer);
+      return;
+    }
+    if (ball.label === 'black') {
+      if (foul) {
+        // 犯规同时打进黑球 → 对手获胜
+        scores[1 - currentPlayer] += 7;
+        endRespottedBlack(1 - currentPlayer);
+      } else {
+        // 合法打进黑球 → 当前选手获胜
+        scores[currentPlayer] += 7;
+        endRespottedBlack(currentPlayer);
+      }
+      return;
+    }
+    return;
+  }
+
+  if (ball.label === 'white') {
+    showFoul('白球入袋');
+    return;
+  }
+
+  // Determine if legal
+  let legal = true;
+  let foulReason = '';
+
+  if (needRed) {
+    // Must hit red first
+    if (firstContact && firstContact.label !== 'red') {
+      legal = false;
+      foulReason = `应先击打红球，却先碰到${firstContact.label}`;
+    }
+    if (ball.label === 'red') {
+      pottedRedThisTurn = true;
+      scores[currentPlayer] += 1;
+    } else {
+      legal = false;
+      foulReason = `应打红球时打入${ball.label}`;
+    }
+  } else {
+    // Must hit color
+    if (firstContact && firstContact.label === 'red') {
+      legal = false;
+      foulReason = '应先碰彩球却先碰红球';
+    }
+    if (ball.isColor) {
+      // 只有纯清彩阶段（红球已清且非红彩交替中的彩球）才需要按顺序
+      if (countRed() === 0 && !pottedRedThisTurn) {
+        // 清彩阶段：必须先碰到顺序正确的彩球
+        // 检查firstContact之前是否有更低序号的彩球仍在台面（排除刚被打进的球自身）
+        const fcIdx = COL_ORDER.indexOf(firstContact?.label);
+        let hitWrongColor = false;
+        if (fcIdx >= 0) {
+          for (let i = 0; i < fcIdx; i++) {
+            const earlier = balls.find(bb => bb.label === COL_ORDER[i] && bb.isOnTable() && bb !== ball);
+            if (earlier) { hitWrongColor = true; break; }
+          }
+        }
+        if (firstContact && firstContact.isColor && hitWrongColor) {
+          legal = false;
+          const target = getNextColorInOrder();
+          foulReason = `应击打${target?.label || '彩球'}，却先碰到${firstContact.label}`;
+        }
+        // 彩球阶段必须按顺序击打（打进更低序号的球才算犯规，打进当前球合法）
+        const idx = COL_ORDER.indexOf(ball.label);
+        let earlierOnTable = null;
+        for (let i = 0; i < idx; i++) {
+          const earlier = balls.find(bb => bb.label === COL_ORDER[i] && bb.isOnTable());
+          if (earlier) { earlierOnTable = earlier; break; }
+        }
+        if (earlierOnTable) {
+          legal = false;
+          foulReason = `应按顺序打${earlierOnTable.label}，却打入${ball.label}`;
+        }
+      }
+      if (legal) {
+        scores[currentPlayer] += ball.value;
+      }
+    } else {
+      legal = false;
+      foulReason = '应打彩球时打入红球';
+    }
+  }
+
+  // First contact check
+  if (!firstContact && legal) {
+    legal = false;
+    foulReason = '未击中任何球';
+  }
+
+  if (!legal) {
+    showFoul(foulReason);
+    return;
+  }
+
+  // 记录本轮进球
+  pottedThisShot.push(ball.label);
+  updateHUD();
+}
+
+function onStop() {
+  // 抢黑模式：所有球停止后判定
+  if (isRespottedBlack) {
+    if (cueBall.potted) {
+      // 白球落袋已在onPocket中处理，此处兜底
+      scores[1 - currentPlayer] += 7;
+      endRespottedBlack(1 - currentPlayer);
+      return;
+    }
+    if (foul || firstContact === null) {
+      // 犯规或未击中黑球 → 对手获胜
+      scores[1 - currentPlayer] += 7;
+      endRespottedBlack(1 - currentPlayer);
+      return;
+    }
+    // 检查是否先碰到了黑球
+    if (firstContact.label !== 'black') {
+      scores[1 - currentPlayer] += 7;
+      endRespottedBlack(1 - currentPlayer);
+      return;
+    }
+    // 黑球是否打进已在onPocket中处理，若未打进则换回合
+    const blackOnTable = balls.some(b => b.label === 'black' && b.isOnTable());
+    if (!blackOnTable) {
+      // 黑球已进（已在onPocket判胜负），兜底
+      return;
+    }
+    // 无人进球 → 换回合
+    nextTurn();
+    return;
+  }
+
+  // Respawn illegally potted colors.
+  // Colors need respotting when:
+  //   - Reds remain on table (red-color alternating phase), OR
+  //   - Just potted the last red (pottedRedThisTurn), OR
+  //   - A foul occurred (e.g. wrong color potted in clearance phase).
+  // This must happen BEFORE the cue ball check — even if the cue ball
+  // is also potted, illegally potted colors still need to be respotted.
+  if (countRed() > 0 || pottedRedThisTurn || foul) {
+    for (const b of balls) {
+      if (b.potted && b.isColor && b.label !== 'white') {
+        const pos = getColorPos(b.label);
+        if (pos) tryPlace(b, pos.x, pos.y);
+      }
+    }
+  }
+
+  // Handle cue ball potted
+  if (cueBall.potted) {
+    placeCueBallInDZ();
+    if (!foul) { showFoul('白球入袋'); }
+    nextTurn();
+    return;
+  }
+
+  // Foul
+  if (foul) {
+    nextTurn();
+    return;
+  }
+
+  // 检查是否未击中任何球
+  if (firstContact === null) {
+    showFoul('未击中任何球');
+    nextTurn();
+    return;
+  }
+
+  // 检查是否先碰错球
+  if (needRed && firstContact.label !== 'red') {
+    showFoul(`应先击打红球，却先碰到${firstContact.label}`);
+    nextTurn();
+    return;
+  }
+
+  if (!needRed && firstContact.label === 'red') {
+    showFoul('应先碰彩球却先碰红球');
+    nextTurn();
+    return;
+  }
+
+  // 清彩阶段：必须先碰到顺序正确的彩球（排除红彩交替中最后一颗红球后的彩球）
+  // 检查firstContact之前是否有更低序号的彩球仍在台面
+  if (!needRed && countRed() === 0 && !pottedRedThisTurn && firstContact.isColor) {
+    const fcIdx = COL_ORDER.indexOf(firstContact.label);
+    let hitWrongColor = false;
+    if (fcIdx >= 0) {
+      for (let i = 0; i < fcIdx; i++) {
+        const earlier = balls.find(bb => bb.label === COL_ORDER[i] && bb.isOnTable());
+        if (earlier) { hitWrongColor = true; break; }
+      }
+    }
+    if (hitWrongColor) {
+      const target = getNextColorInOrder();
+      showFoul(`应击打${target?.label || '彩球'}，却先碰到${firstContact.label}`);
+      nextTurn();
+      return;
+    }
+  }
+
+  // Game over check
+  if (countRed() === 0 && countColors() === 0) {
+    if (scores[0] === scores[1]) {
+      startRespottedBlack();
+      return;
+    }
+    state = 'over';
+    const winner = scores[0] > scores[1] ? '选手 1' : '选手 2';
+    showMsg('🏆 比赛结束！', `<em>${winner}</em> 获胜！<br>比分 ${scores[0]} : ${scores[1]}`, 8000);
+    return;
+  }
+
+  // Phase transition: all reds cleared → colors only (classic mode only)
+  if (gameMode === 'classic' && countRed() === 0 && countColors() > 0 && !needRed) {
+    showMsg('🎯 彩球阶段', '按顺序击打黄→绿→棕→蓝→粉→黑', 2500);
+  }
+
+  // 检查本轮是否有进球
+  const anyPotted = pottedThisShot.length > 0;
+  
+  if (!anyPotted) {
+    nextTurn();
+    return;
+  }
+
+  // Continue turn
+  if (needRed && pottedRedThisTurn) {
+    needRed = false;
+    // 只有非最后一颗红球时才重置（最后一红需保留标记，等待打彩球）
+    if (countRed() > 0) pottedRedThisTurn = false;
+  } else if (!needRed && countRed() > 0) {
+    needRed = true;
+    pottedRedThisTurn = false;
+  } else if (!needRed && countRed() === 0) {
+    // 彩球打进（完成最后一套红彩组合，或已在纯清彩阶段）
+    pottedRedThisTurn = false;
+    const next = getNextColorInOrder();
+    if (!next) {
+      if (scores[0] === scores[1]) {
+        startRespottedBlack();
+        return;
+      }
+      state = 'over';
+      const winner = scores[0] > scores[1] ? '选手 1' : '选手 2';
+      showMsg('🏆 比赛结束！', `<em>${winner}</em> 获胜！<br>比分 ${scores[0]} : ${scores[1]}`, 8000);
+      return;
+    }
+  }
+
+  firstContact = null;
+  state = 'aim';
+  updateHUD();
+}
+
+// ================================================================
+//  RENDER
+// ================================================================
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  drawTable();
+  drawBalls();
+  if (state === 'aim' || state === 'powering' || state === 'dragging') drawAim();
+  drawExtra();
+}
+
+function drawTable() {
+  // Outer frame
+  const fg = ctx.createLinearGradient(0, 0, W, H);
+  fg.addColorStop(0, '#4a2e18'); fg.addColorStop(0.5, '#6b4428');
+  fg.addColorStop(1, '#3d2412');
+  ctx.fillStyle = fg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Wood grain
+  ctx.save();
+  ctx.globalAlpha = 0.05;
+  for (let i = 0; i < 50; i++) {
+    const yy = i * 10 + 3;
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(0, yy + Math.sin(i * 0.7) * 2);
+    for (let x = 0; x < W; x += 15)
+      ctx.lineTo(x, yy + Math.sin((x + i * 60) * 0.007) * 1.5 + Math.sin(i * 1.2) * 1);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Felt
+  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 4;
+  const fg2 = ctx.createRadialGradient(L + TABLE_W*0.3, T + TABLE_H*0.35, 30, L + TABLE_W*0.5, T + TABLE_H*0.5, TABLE_W*0.65);
+  fg2.addColorStop(0, '#2a8a4a'); fg2.addColorStop(0.3, '#1c7a3a');
+  fg2.addColorStop(0.6, '#156b30'); fg2.addColorStop(1, '#0d5a24');
+  ctx.fillStyle = fg2;
+  ctx.fillRect(L, T, TABLE_W, TABLE_H);
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+  // Felt texture
+  ctx.save(); ctx.globalAlpha = 0.025;
+  for (let y = T; y < B; y += 2.5) {
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 0.4;
+    ctx.beginPath(); ctx.moveTo(L, y);
+    for (let x = L; x < R; x += 6) ctx.lineTo(x, y + Math.sin((x + y * 9) * 0.018) * 0.6);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Cushion edge
+  ctx.strokeStyle = '#145a28'; ctx.lineWidth = 5;
+  ctx.strokeRect(L, T, TABLE_W, TABLE_H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
+  ctx.strokeRect(L + 6, T + 6, TABLE_W - 12, TABLE_H - 12);
+
+  // Baulk line（开球线）— 距左库 737mm 垂直线
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 5]);
+  ctx.beginPath(); ctx.moveTo(BAULK_X, T + 6); ctx.lineTo(BAULK_X, B - 6); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.font = '8px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('开球线', BAULK_X, T + 8);
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('开球线', BAULK_X, B - 8);
+  ctx.restore();
+
+  // D区 — 朝左开口的半圆（以棕球点为圆心，292mm 半径）
+  ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1.2;
+  // 从上（3π/2）逆时针到下（π/2）经过左（π）形成左半圆
+  ctx.beginPath(); ctx.arc(BAULK_X, CY2, DR, 3 * Math.PI / 2, Math.PI / 2, true); ctx.stroke();
+
+  // 点位标记：棕蓝粉黑均在纵向中心线上（一字排开）
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  for (const [mx, my] of [[BAULK_X, CY2], [CX2, CY2], [PINK_X, CY2], [BLACK_X, CY2]]) {
+    ctx.beginPath(); ctx.arc(mx, my, 3.5, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Pockets
+  for (const p of pockets) {
+    ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 8;
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(p.x, p.y, POCKET_R + 3, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+    const pg = ctx.createRadialGradient(p.x - 2, p.y - 2, 1, p.x, p.y, POCKET_R);
+    pg.addColorStop(0, '#222'); pg.addColorStop(1, '#080808');
+    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(p.x, p.y, POCKET_R, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function drawBall(ball) {
+  if (!ball.isOnTable()) return;
+  const {x, y, r, color, label} = ball;
+
+  ctx.save();
+  // Shadow
+  ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 7; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+
+  // Sphere gradient
+  const g = ctx.createRadialGradient(x - r*0.3, y - r*0.35, r*0.1, x, y, r);
+  if (label === 'white') {
+    g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#f0f0f0'); g.addColorStop(1, '#ccc');
+  } else if (label === 'black') {
+    g.addColorStop(0, '#555'); g.addColorStop(0.5, '#333'); g.addColorStop(1, '#111');
+  } else {
+    g.addColorStop(0, lighten(color, 50)); g.addColorStop(0.5, color); g.addColorStop(1, darken(color, 25));
+  }
+  ctx.shadowBlur = 0; ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+
+  // Highlight
+  const hg = ctx.createRadialGradient(x - r*0.3, y - r*0.35, 0, x - r*0.3, y - r*0.35, r*0.55);
+  hg.addColorStop(0, 'rgba(255,255,255,0.45)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+
+  // Small specular
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath(); ctx.arc(x - r*0.35, y - r*0.38, r*0.18, 0, Math.PI*2); ctx.fill();
+
+  // Rim
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawBalls() {
+  // Draw cue ball glow when aiming, powering, placing or dragging
+  if ((state === 'aim' || state === 'powering' || state === 'placing' || state === 'dragging') && cueBall.isOnTable()) {
+    ctx.save();
+    const pulse = Math.sin(Date.now() * 0.004) * 0.15 + 0.25;
+    const g = ctx.createRadialGradient(cueBall.x, cueBall.y, BALL_R * 0.5, cueBall.x, cueBall.y, BALL_R * 3);
+    g.addColorStop(0, `rgba(255,255,255,${pulse * 0.4})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cueBall.x, cueBall.y, BALL_R * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Highlight target balls when aiming
+  if ((state === 'aim' || state === 'powering') && cueBall.isOnTable()) {
+    // 抢黑模式：高亮黑球
+    if (isRespottedBlack) {
+      const blackBall = balls.find(b => b.label === 'black' && b.isOnTable());
+      if (blackBall) {
+        ctx.save();
+        const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+        ctx.strokeStyle = `rgba(255,217,61,${pulse * 0.4})`;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([3, 6]);
+        ctx.beginPath(); ctx.arc(blackBall.x, blackBall.y, blackBall.r + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Label
+        ctx.fillStyle = 'rgba(255,217,61,0.5)';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚫ 目标', blackBall.x, blackBall.y - blackBall.r - 12);
+        ctx.restore();
+      }
+    }
+
+    const targetLabel = needRed ? 'red' : null;
+    if (targetLabel === 'red') {
+      for (const b of balls) {
+        if (b.isOnTable() && b.label === 'red') {
+          ctx.save();
+          const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+          ctx.strokeStyle = `rgba(255,255,255,${pulse * 0.15})`;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 6]);
+          ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
+    } else if (!needRed && countRed() > 0) {
+      // Highlight all colors
+      for (const b of balls) {
+        if (b.isOnTable() && b.isColor) {
+          ctx.save();
+          const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+          ctx.strokeStyle = `rgba(255,255,255,${pulse * 0.15})`;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 6]);
+          ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      }
+    } else if (!needRed && countRed() === 0) {
+      // Highlight next color in order
+      const next = getNextColorInOrder();
+      if (next && next.isOnTable()) {
+        ctx.save();
+        const pulse = Math.sin(Date.now() * 0.005) * 0.3 + 0.7;
+        ctx.strokeStyle = `rgba(255,255,255,${pulse * 0.25})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 6]);
+        ctx.beginPath(); ctx.arc(next.x, next.y, next.r + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Label
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('● 目标', next.x, next.y - next.r - 10);
+        ctx.restore();
+      }
+    }
+  }
+
+  for (const b of balls) drawBall(b);
+}
+
+// ================================================================
+//  COLLISION PREDICTION (for aim preview)
+// ================================================================
+function predictCollision() {
+  if (!cueBall.isOnTable()) return null;
+  const cx = cueBall.x, cy = cueBall.y;
+  const dx = Math.cos(aimAngle), dy = Math.sin(aimAngle);
+  const vel = power;
+  if (vel < 0.2) return null;
+
+  // Simulate frame-by-frame (same as tickPhysics) to match discrete overlap normals
+  let sx = cx, sy = cy;
+  let svx = dx * vel, svy = dy * vel;
+  const MAX_FRAMES = 120;
+
+  for (let f = 0; f < MAX_FRAMES; f++) {
+    sx += svx; sy += svy;
+    svx *= FRICTION; svy *= FRICTION;
+    if (Math.hypot(svx, svy) < MIN_SPEED) break;
+
+    // Check wall — if hits wall before ball, break (no ball collision)
+    if (sx - BALL_R < L || sx + BALL_R > R ||
+        sy - BALL_R < T || sy + BALL_R > B) break;
+
+    // Check overlap with all other balls
+    for (const b of balls) {
+      if (b === cueBall || !b.isOnTable()) continue;
+      const dist = Math.hypot(b.x - sx, b.y - sy);
+      if (dist < BALL_R * 2 && dist > 0.001) {
+        // ── Collision! Compute using overlapping positions like resolveCollision ──
+        const nux = (b.x - sx) / dist;
+        const nuy = (b.y - sy) / dist;
+
+        const cvx = dx * vel, cvy = dy * vel;
+        const relVn = cvx * nux + cvy * nuy;
+        if (relVn <= 0) return null;
+
+        const impulse = relVn * 0.82;
+        return {
+          ball: b,
+          t: Math.hypot(sx - cx, sy - cy),
+          cueAtContact: { x: sx, y: sy },
+          nux, nuy,
+          cueVx: cvx - impulse * nux,
+          cueVy: cvy - impulse * nuy,
+          targetVx: impulse * nux,
+          targetVy: impulse * nuy,
+        };
+      }
+    }
+  }
+
+  // ── Fallback: no overlap in sim → use ray-cast with exact touch normal ──
+  let firstHit = null, minT = Infinity;
+  for (const b of balls) {
+    if (b === cueBall || !b.isOnTable()) continue;
+    const ex = b.x - cx, ey = b.y - cy;
+    const t = ex * dx + ey * dy;
+    if (t < 0) continue;
+    const closeX = cx + t * dx, closeY = cy + t * dy;
+    const d = Math.hypot(b.x - closeX, b.y - closeY);
+    const minDist = BALL_R * 2;
+    if (d < minDist) {
+      const offset = Math.sqrt(minDist * minDist - d * d);
+      const hitT = Math.max(0, t - offset);
+      if (hitT < minT) {
+        minT = hitT;
+        firstHit = {
+          ball: b, t: hitT,
+          cueAtContact: { x: cx + hitT * dx, y: cy + hitT * dy }
+        };
+      }
+    }
+  }
+
+  if (!firstHit) return null;
+
+  const cc = firstHit.cueAtContact;
+  const tb = firstHit.ball;
+  const nd = Math.hypot(tb.x - cc.x, tb.y - cc.y);
+  if (nd < 0.001) return null;
+  const nux = (tb.x - cc.x) / nd;
+  const nuy = (tb.y - cc.y) / nd;
+
+  const cvx = dx * vel, cvy = dy * vel;
+  const relVn = cvx * nux + cvy * nuy;
+  if (relVn <= 0) return firstHit;
+
+  const impulse = relVn * 0.82;
+  firstHit.cueVx = cvx - impulse * nux;
+  firstHit.cueVy = cvy - impulse * nuy;
+  firstHit.targetVx = impulse * nux;
+  firstHit.targetVy = impulse * nuy;
+
+  return firstHit;
+}
+
+function drawArrow(x, y, vx, vy, color, scale) {
+  const len = Math.hypot(vx, vy) * scale;
+  if (len < 2) return;
+  const ang = Math.atan2(vy, vx);
+  const headLen = Math.min(12, len * 0.35);
+
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.globalAlpha = 0.9;
+
+  // Shaft
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + Math.cos(ang) * (len - headLen), y + Math.sin(ang) * (len - headLen));
+  ctx.stroke();
+
+  // Arrow head
+  ctx.beginPath();
+  const tipX = x + Math.cos(ang) * len, tipY = y + Math.sin(ang) * len;
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(tipX - Math.cos(ang - 0.5) * headLen, tipY - Math.sin(ang - 0.5) * headLen);
+  ctx.lineTo(tipX - Math.cos(ang + 0.5) * headLen, tipY - Math.sin(ang + 0.5) * headLen);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawAim() {
+  if (cueBall.potted || !cueBall.active) return;
+  const cx = cueBall.x, cy = cueBall.y;
+  const dx = Math.cos(aimAngle), dy = Math.sin(aimAngle);
+  const aimLen = 220;
+
+  // Collision prediction
+  const pred = predictCollision();
+  const hitDist = pred ? pred.t : null;
+
+  ctx.save();
+
+  // ── Direction line to first contact ──
+  if (pred) {
+    const contactX = pred.cueAtContact.x, contactY = pred.cueAtContact.y;
+
+    // Solid prediction line from cue ball to contact point
+    ctx.strokeStyle = '#ffee66'; ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#ffee66'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(contactX, contactY); ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Glow marker at contact point
+    ctx.fillStyle = '#ffee66';
+    ctx.shadowColor = '#ffee66'; ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.arc(contactX, contactY, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Faint extension beyond contact
+    const remain = 60;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 0.5; ctx.setLineDash([2, 12]);
+    ctx.beginPath(); ctx.moveTo(contactX, contactY);
+    ctx.lineTo(contactX + dx * remain, contactY + dy * remain); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ── Post-collision velocity arrows ──
+    if (pred.cueVx !== undefined && power > 0.5) {
+      const arrowScale = 3.0;
+      // Cue ball arrow (cyan)
+      drawArrow(pred.cueAtContact.x, pred.cueAtContact.y,
+        pred.cueVx, pred.cueVy, '#4dc9f6', arrowScale);
+      // Target ball arrow (orange)
+      drawArrow(pred.ball.x, pred.ball.y,
+        pred.targetVx, pred.targetVy, '#f9a825', arrowScale);
+    }
+  } else {
+    // No contact — standard dashed line
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.setLineDash([5, 8]);
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + dx * aimLen, cy + dy * aimLen); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Extended to cushion
+    const tx = dx > 0 ? (R - cx) / dx : (dx < 0 ? (L - cx) / dx : Infinity);
+    const ty = dy > 0 ? (B - cy) / dy : (dy < 0 ? (T - cy) / dy : Infinity);
+    const t = Math.min(tx, ty);
+    if (isFinite(t) && t > aimLen) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.5; ctx.setLineDash([2, 14]);
+      ctx.beginPath(); ctx.moveTo(cx + dx * aimLen, cy + dy * aimLen);
+      ctx.lineTo(cx + dx * t, cy + dy * t); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Ghost ball / aiming arc
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, BALL_R + 3, aimAngle - 0.4, aimAngle + 0.4); ctx.stroke();
+
+  // Cue stick
+  const startDist = BALL_R + 5 + (state === 'powering' ? power * 0.3 : 0);
+  const cueLen = 340;
+  const sx2 = cx - dx * startDist, sy2 = cy - dy * startDist;
+  const ex = cx - dx * (startDist + cueLen), ey = cy - dy * (startDist + cueLen);
+
+  ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 5;
+  const cg = ctx.createLinearGradient(sx2, sy2, ex, ey);
+  cg.addColorStop(0, '#f5e6c8'); cg.addColorStop(0.3, '#e8d5a8');
+  cg.addColorStop(0.7, '#d4b87a'); cg.addColorStop(0.85, '#b89850');
+  cg.addColorStop(1, '#7a5a28');
+  ctx.strokeStyle = cg; ctx.lineWidth = 5.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(sx2, sy2); ctx.lineTo(ex, ey); ctx.stroke();
+
+  // Cue highlight
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1.5;
+  const perpX = -dy * 1.2, perpY = dx * 1.2;
+  ctx.beginPath(); ctx.moveTo(sx2 + perpX, sy2 + perpY);
+  ctx.lineTo(ex + perpX, ey + perpY); ctx.stroke();
+
+  // Ferrule
+  ctx.fillStyle = '#5a9fd4'; ctx.shadowBlur = 3;
+  ctx.beginPath(); ctx.arc(sx2, sy2, 2.8, 0, Math.PI*2); ctx.fill();
+
+  ctx.shadowBlur = 0; ctx.restore();
+}
+
+function drawExtra() {
+  // Ball count label
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.font = '9px sans-serif';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText('台面剩余', W - 12, 14);
+  ctx.restore();
+}
+
+// ================================================================
+//  COLOR HELPERS
+// ================================================================
+function lighten(hex, amt) {
+  const c = hex.replace('#','');
+  const r = Math.min(255, parseInt(c.substr(0,2),16)+amt);
+  const g = Math.min(255, parseInt(c.substr(2,2),16)+amt);
+  const b = Math.min(255, parseInt(c.substr(4,2),16)+amt);
+  return `rgb(${r},${g},${b})`;
+}
+function darken(hex, amt) {
+  const c = hex.replace('#','');
+  const r = Math.max(0, parseInt(c.substr(0,2),16)-amt);
+  const g = Math.max(0, parseInt(c.substr(2,2),16)-amt);
+  const b = Math.max(0, parseInt(c.substr(4,2),16)-amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ================================================================
+// ================================================================
+//  GAME LOOP
+// ================================================================
+function loop() {
+  if (state === 'moving') tickPhysics();
+  
+  // 持续加力支持 — 在powering或dragging状态下检查按键
+  if ((state === 'powering' || state === 'dragging') && cueBall.isOnTable()) {
+    const step = 0.8;
+    if (keysPressed['ArrowRight'] || keysPressed['ArrowUp']) {
+      power = Math.min(MAX_POWER, power + step * 0.5);
+      updatePowerDisplay();
+    }
+    if (keysPressed['ArrowLeft'] || keysPressed['ArrowDown']) {
+      power = Math.max(0, power - step * 0.5);
+      updatePowerDisplay();
+    }
+  }
+  
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ================================================================
+//  INPUT
+// ================================================================
+let mx = 0, my = 0;
+let mouseActive = false;
+
+function resetAimToDefault() {
+  if (cueBall && cueBall.isOnTable()) {
+    aimAngle = -Math.PI / 8; // slight upward-right default
+  }
+}
+
+// 检查白球是否在D区内（左半圆）
+function isCueBallInDZ() {
+  if (!cueBall) return false;
+  const dx = cueBall.x - BAULK_X;
+  const dy = cueBall.y - CY2;
+  const dist = Math.hypot(dx, dy);
+  // 必须在半径DR内 且 在开球线左侧（x <= BAULK_X）
+  return dist <= DR && cueBall.x <= BAULK_X;
+}
+
+// 开始手动放置白球
+function startCueBallPlacement() {
+  state = 'placing';
+  draggingCueBall = false;
+  cueBall.vx = 0;
+  cueBall.vy = 0;
+  showMsg('⚪ 放置白球', '在D区内放置，按 Space 确认', 5000);
+}
+
+function cpos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scX = canvas.width / rect.width, scY = canvas.height / rect.height;
+  const cx2 = (e.touches ? e.touches[0].clientX : e.clientX);
+  const cy2 = (e.touches ? e.touches[0].clientY : e.clientY);
+  return { x: (cx2 - rect.left) * scX, y: (cy2 - rect.top) * scY };
+}
+
+canvas.addEventListener('mousemove', e => {
+  const p = cpos(e); mx = p.x; my = p.y;
+  mouseActive = true;
+  if ((state === 'aim' || state === 'powering') && cueBall.isOnTable()) {
+    const dx = mx - cueBall.x, dy = my - cueBall.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 6) {
+      const target = Math.atan2(dy, dx);
+      let diff = target - aimAngle;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+      aimAngle += diff * 0.55;
+    }
+  }
+  // 拖拽击球 — 根据拖拽距离和方向计算力度和角度
+  if (state === 'dragging' && cueBall.isOnTable()) {
+    const dragDist = Math.hypot(mx - dragStartX, my - dragStartY);
+    const dragAngleX = mx - dragStartX;
+    const dragAngleY = my - dragStartY;
+    // 拖拽距离转化为力度（最大100px对应100%力度）
+    power = Math.min(MAX_POWER, dragDist * 0.24);  // 0.24 = MAX_POWER / 100px
+    // 拖拽方向转化为击球角度（反向）
+    aimAngle = Math.atan2(-dragAngleY, -dragAngleX);
+    updatePowerDisplay();
+  }
+  // 手动放置白球 — 检查碰撞，避免穿模，限制在D区左半圆内
+  if (state === 'placing' && cueBall.isOnTable() && draggingCueBall) {
+    const dx = mx - BAULK_X, dy = my - CY2;
+    const dist = Math.hypot(dx, dy);
+    // 只能在左半圆内放置（距离≤DR 且 x≤BAULK_X）
+    if (dist <= DR && mx <= BAULK_X) {
+      // 检查新位置是否和其他球重叠
+      if (!ballOverlaps(mx, my, cueBall)) {
+        cueBall.x = mx;
+        cueBall.y = my;
+      }
+    }
+  }
+});
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  if (state === 'placing' && cueBall.isOnTable()) {
+    const dx = mx - cueBall.x, dy = my - cueBall.y;
+    if (Math.hypot(dx, dy) <= BALL_R + 8) {
+      draggingCueBall = true;
+    }
+  } else if (state === 'aim' && cueBall.isOnTable()) {
+    // 进入拖拽模式而不是powering
+    dragStartX = mx;
+    dragStartY = my;
+    state = 'dragging';
+    power = 0;
+    powerWrap.classList.add('show');
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (state === 'placing') {
+    draggingCueBall = false;
+  } else if (state === 'dragging') {
+    // 拖拽击球完成
+    state = 'powering';
+    // 保留计算的power和aimAngle，直接调用shoot
+    shoot();
+  } else {
+    shoot();
+  }
+});
+canvas.addEventListener('mouseleave', () => {
+  if (state === 'dragging') {
+    // 拖拽离开canvas时取消
+    state = 'aim';
+    powerWrap.classList.remove('show');
+    powerFill.style.width = '0%';
+    powerLabel.style.opacity = '1';
+  } else if (state === 'powering') {
+    state = 'aim';
+    powerWrap.classList.remove('show');
+    powerFill.style.width = '0%';
+    powerLabel.style.opacity = '1';
+  }
+});
+
+// Touch
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const p = cpos(e); mx = p.x; my = p.y;
+  if (cueBall.isOnTable()) {
+    const dx = mx - cueBall.x, dy = my - cueBall.y;
+    if (Math.hypot(dx, dy) > 6) aimAngle = Math.atan2(dy, dx);
+  }
+  if (state === 'aim' && cueBall.isOnTable()) {
+    power = 0;
+    updatePowerDisplay();
+    state = 'powering';
+    powerWrap.classList.add('show');
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const p = cpos(e); mx = p.x; my = p.y;
+  if ((state === 'aim' || state === 'powering') && cueBall.isOnTable()) {
+    const dx = mx - cueBall.x, dy = my - cueBall.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 6) {
+      const target = Math.atan2(dy, dx);
+      let diff = target - aimAngle;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+      aimAngle += diff * 0.55;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => { e.preventDefault(); shoot(); }, { passive: false });
+
+// Prevent right-click context menu
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+function updatePowerDisplay() {
+  const pct = Math.round(power / MAX_POWER * 100);
+  powerFill.style.width = pct + '%';
+  powerValue.textContent = pct + '%';
+  powerLabel.style.opacity = power > 0.5 ? '0' : '1';
+}
+
+// ================================================================
+//  KEYBOARD
+// ================================================================
+document.addEventListener('keydown', e => {
+  // 记录按键状态，用于持续加力
+  keysPressed[e.key] = true;
+  
+  // Ignore key repeats (fixes space bar flashing)
+  if (e.repeat) return;
+
+  const isPowerState = state === 'powering' && cueBall.isOnTable();
+  const isDraggingState = state === 'dragging' && cueBall.isOnTable();
+  const isAimState = state === 'aim' && cueBall.isOnTable();
+  const isPlacingState = state === 'placing' && cueBall.isOnTable();
+
+  if (e.key === ' ' || e.key === 'Space') {
+    e.preventDefault();
+    if (isPlacingState) {
+      if (isCueBallInDZ()) {
+        state = 'aim';
+        msgBox.classList.remove('show');
+        updateHUD();
+      } else {
+        showFoul('白球必须在D区内');
+      }
+    } else if (isDraggingState) {
+      // 在拖拽状态下按Space可以直接击球
+      state = 'powering';
+      shoot();
+    } else if (isAimState) {
+      power = 0;
+      updatePowerDisplay();
+      state = 'dragging';
+      dragStartX = mx;
+      dragStartY = my;
+      powerWrap.classList.add('show');
+    } else if (isPowerState) {
+      shoot();
+    }
+    return;
+  }
+
+  // In aim state: ← → fine-tune aim angle (Shift = ultra-fine)
+  if (isAimState) {
+    const step = e.shiftKey ? 0.002 : 0.008;  // 0.46° normal, 0.11° with Shift
+    if (e.key === 'ArrowLeft') { e.preventDefault(); aimAngle -= step; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); aimAngle += step; }
+  }
+
+  // 开球时按P放置白球
+  if (isAimState && (e.key === 'p' || e.key === 'P')) {
+    e.preventDefault();
+    startCueBallPlacement();
+    return;
+  }
+});
+
+// 键盘抬起事件 — 清除按键状态
+document.addEventListener('keyup', e => {
+  keysPressed[e.key] = false;
+});
+
+// ================================================================
+//  MODE SELECT / RESTART
+// ================================================================
+modeSelect.addEventListener('change', () => {
+  const val = modeSelect.value;
+  if (val === 'restart') {
+    // 重新开局（保持当前模式）
+    resetGame();
+    modeSelect.value = gameMode; // 恢复显示当前模式
+    return;
+  }
+  // 切换模式
+  gameMode = val;
+  if (gameMode === 'respottedBlack') {
+    isRespottedBlack = true;
+  }
+  resetGame();
+});
+
+function resetGame() {
+  scores = [0, 0];
+  currentPlayer = 0;
+  state = 'aim';
+  foul = false; power = 0;
+  powerFill.style.width = '0%'; powerValue.textContent = '0%';
+  powerLabel.style.opacity = '1'; powerWrap.classList.remove('show');
+  msgBox.classList.remove('show'); foulToast.classList.remove('show');
+  needRed = (gameMode === 'classic');
+  pottedRedThisTurn = false; firstContact = null;
+  pottedThisShot = [];
+  isRespottedBlack = (gameMode === 'respottedBlack');
+  mouseActive = false;
+  draggingCueBall = false;
+  resetAimToDefault();
+
+  initBalls();
+  if (gameMode === 'classic') separateBalls();
+
+  // 提示
+  if (gameMode === 'clearance') {
+    showMsg('🎯 清彩模式', '按顺序击打黄→绿→棕→蓝→粉→黑', 3000);
+  } else if (gameMode === 'respottedBlack') {
+    showMsg('⚫ 抢黑模式', '谁先打进黑球即获胜', 3000);
+  } else {
+    showMsg('🎮 新局开始', '按 P 手动放置白球，或按 Space 开始', 2500);
+  }
+  updateHUD();
+}
+
+// ================================================================
+//  START
+// ================================================================
+resetGame();
+loop();
+</script>
+</body>
+</html>
