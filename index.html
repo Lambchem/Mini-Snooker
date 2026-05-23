@@ -230,8 +230,9 @@ const H = TABLE_H + CUSHION * 2;  // 736
 const L = CUSHION, R = CUSHION + TABLE_W;
 const T = CUSHION, B = CUSHION + TABLE_H;
 
-const FRICTION = 0.986;
-const BOUNCE = 0.78;
+// const FRICTION = 0.986;
+const FRICTION = 0.992;
+const BOUNCE = 0.82;
 const MIN_SPEED = 0.06;
 const MAX_POWER = 24;
 const SPACING = BALL_D + 0.5;
@@ -1616,7 +1617,7 @@ canvas.addEventListener('mousemove', e => {
       let diff = target - aimAngle;
       while (diff > Math.PI) diff -= 2 * Math.PI;
       while (diff < -Math.PI) diff += 2 * Math.PI;
-      aimAngle += diff * 0.55;
+      aimAngle += diff * 0.15;
     }
   }
   // 拖拽击球 — 根据拖拽距离和方向计算力度和角度
@@ -1716,7 +1717,7 @@ canvas.addEventListener('touchmove', e => {
       let diff = target - aimAngle;
       while (diff > Math.PI) diff -= 2 * Math.PI;
       while (diff < -Math.PI) diff += 2 * Math.PI;
-      aimAngle += diff * 0.55;
+      aimAngle += diff * 0.15;
     }
   }
 }, { passive: false });
@@ -1777,7 +1778,7 @@ document.addEventListener('keydown', e => {
 
   // In aim state: ← → fine-tune aim angle (Shift = ultra-fine)
   if (isAimState) {
-    const step = e.shiftKey ? 0.002 : 0.008;  // 0.46° normal, 0.11° with Shift
+    const step = e.shiftKey ? 0.001 : 0.004;  // 0.23° normal, 0.057° with Shift
     if (e.key === 'ArrowLeft') { e.preventDefault(); aimAngle -= step; }
     if (e.key === 'ArrowRight') { e.preventDefault(); aimAngle += step; }
   }
