@@ -467,57 +467,11 @@ mini-snooker/
 
 ## How to Run Locally
 
-### Option 1: Open the File Directly
-
 Open the following file in a modern browser:
 
 ```text
 index.html
 ```
-
-### Option 2: Run a Local Static Server
-
-Using Python:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then open:
-
-```text
-http://localhost:8000
-```
-
-Using Node.js:
-
-```bash
-npx serve .
-```
-
----
-
-## GitHub Pages Deployment
-
-This project is suitable for GitHub Pages because it is a static front-end game.
-
-To deploy with GitHub Pages:
-
-1. Push the project to a GitHub repository.
-2. Go to the repository settings.
-3. Open the Pages section.
-4. Select the main branch.
-5. Select the root directory.
-6. Save the settings.
-7. Open the generated GitHub Pages URL.
-
-Example:
-
-```text
-https://your-username.github.io/canvas-snooker/
-```
-
----
 
 ## Browser Support
 
@@ -552,26 +506,6 @@ canvas-game
 
 ---
 
-## Screenshots
-
-Add screenshots after publishing the project.
-
-Example:
-
-```markdown
-![Gameplay Screenshot](screenshots/gameplay.png)
-```
-
-Recommended screenshots:
-
-- Full table view
-- Aiming prediction
-- Foul message
-- Clearance mode
-- Respotted black mode
-
----
-
 ## Known Limitations
 
 Known current limitations include:
@@ -602,28 +536,6 @@ This project is a good front-end portfolio piece because it demonstrates:
 - Vanilla JavaScript development
 
 It is more interactive and technically interesting than many basic front-end demo projects.
-
----
-
-## License
-
-MIT License is recommended.
-
-Create a `LICENSE` file and add the full MIT License text.
-
-Example placeholder:
-
-```text
-MIT License
-
-Copyright (c) 2026 Your Name
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files, to deal in the Software
-without restriction, including without limitation the rights to use, copy,
-modify, merge, publish, distribute, sublicense, and/or sell copies of the
-Software, subject to the conditions in the full MIT License text.
-```
 
 ---
 
