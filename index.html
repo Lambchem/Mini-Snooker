@@ -942,11 +942,12 @@ function onStop() {
   // Respawn illegally potted colors.
   // Colors need respotting when:
   //   - Reds remain on table (red-color alternating phase), OR
-  //   - A foul occurred and an illegal color was potted (not in pottedThisShot).
+  //   - Just potted the last red (pottedRedThisTurn), OR
+  //   - A foul occurred in clearance phase (and illegal color was potted).
   // This must happen BEFORE the cue ball check — even if the cue ball
   // is also potted, illegally potted colors still need to be respotted.
-  if (countRed() > 0) {
-    // Red-color alternating phase: respawn all potted colors
+  if (countRed() > 0 || pottedRedThisTurn) {
+    // Red-color alternating phase or just completed last red: respawn all potted colors
     for (const b of balls) {
       if (b.potted && b.isColor && b.label !== 'white') {
         const pos = getColorPos(b.label);
@@ -954,7 +955,7 @@ function onStop() {
       }
     }
   } else if (foul) {
-    // Foul occurred: respawn only illegally potted colors (those not recorded in pottedThisShot)
+    // Clearance phase foul: respawn only illegally potted colors (those not recorded in pottedThisShot)
     for (const b of balls) {
       if (b.potted && b.isColor && b.label !== 'white' && !pottedThisShot.includes(b.label)) {
         const pos = getColorPos(b.label);
